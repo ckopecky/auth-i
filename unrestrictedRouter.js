@@ -1,65 +1,44 @@
 const express = require("express");
-const User = require("./UserModel");
+const bcrypt = require('bcrypt');
+const User = require("./data/userModel");
 const router = express.Router();
 
-
-const post = (req, res) => {
-    const { username, password } = req.body;
-    User.findOne({ username })
-        .then(user => {
-            if(!user) {
-                res.status(404).json(`${username} not found`)
-            }
-
-            else {
-                user
-                    .passwordValidation(password)
-                    .then(passwordsMatch => {
-                        if (passwordsMatch){
-                            req.session.username = user.username;  
-                            res.status(200).json({Success: "Log-in successful"});
-                        } else{
-                            res.status(401).json({Error: "invalid password"});
-                        }
-                    })
-                    .catch(err => {
-                        res.status(500).json({Error: err.message});
-                    });
-            }
-        })
-};
-
-const get = (req, res) => {
-    if(req.session){
-        req.session.destroy(err => {
-            if(err){
-                res.status(500).json(`error logging out`);
-            } else {
-                res.status(200).json(`Goodbye!!`)
-            }
-        });
-    }
-};
-
-const postUser = (req, res) => {
-    User.create(req.body)
-        .then(user => {
-            res.status(201).json(user);
+const register = (req, res) => {
+    const user = req.body;
+    const hash = bcrypt.hashSync(user.password, 10);
+    user.password = hash;
+    User.insert(user)
+        .then(response => {
+            res.status(201).json(response);
         })
         .catch(err => {
-            res.status(500).json(err.message);
-        });
-};
+            res.status(500).json({err: err.message})
+        })
+}
 
-router
-    .route("/login")
-        .post(post);
-router
-    .route("/logout")
-        .get(get);
+const login = (req, res) => {
+    const { username, guess } = req.body;
+    User.findUsersBy({username})
+        .first()
+        .then(user => {
+            if(guess && bcrypt.compareSync(guess, user.password)) {
+                res.status(200).json({message: `Welcome ${user.username}!`})
+            } else {
+                res.status(401).json({message: "invalid credentials"});
+            }
 
-router
-    .route("/register")
-        .post(postUser);
+        })
+        .catch(err => {
+            res.status(500).json({error: err.message});
+        })
+}
+
+router.route('/register')
+    .post(register);
+router.route('/login')
+    .post(login);
+
+
+
 
 module.exports = router;
